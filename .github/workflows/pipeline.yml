@@ -90,8 +90,6 @@ jobs:
         name: surefire-reports
         path: target/surefire-reports/
         if-no-files-found: ignore
-
-
 sonarQube-scan:
   name: SonarQube Scan
   runs-on: ubuntu-latest
