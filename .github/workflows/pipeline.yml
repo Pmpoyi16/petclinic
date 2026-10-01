@@ -1,11 +1,10 @@
 name: CI/CD Pipeline - PetClinic
- 
+
 on:
   push:
-    branches: [ dev, main ]
+    branches: [dev, main]
   pull_request:
-    branches: [ main ]
-
+    branches: [main]
 
 env:
   JAVA_VERSION: '25'
@@ -23,102 +22,107 @@ env:
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
   ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
- 
+
 jobs:
+
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
- 
+
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build
     runs-on: ubuntu-latest
     needs: gitleaks
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
- 
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
+          distribution: temurin
           cache: maven
- 
+
       - name: Compile and package (skip tests)
         run: mvn -B clean package -DskipTests
- 
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
           path: target/*.jar
           retention-days: 1
-    Test:
-  name: Test
-  runs-on: ubuntu-latest
-  needs: build
 
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
 
-    - name: Set up JDK ${{ env.JAVA_VERSION }}
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ env.JAVA_VERSION }}
-        distribution: 'temurin'
-        cache: maven
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Run unit tests
-      run: mvn -B test
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
 
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: target/surefire-reports/
-        name: surefire-reports
-        path: target/surefire-reports/
-        if-no-files-found: ignore
-  sonarQube-scan:
-    name: SonarQube-Scan
+      - name: Run unit tests
+        run: mvn -B test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+  sonarqube-scan:
+    name: SonarQube Scan
     runs-on: ubuntu-latest
     needs: test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
- 
+
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
+          distribution: temurin
           cache: maven
- 
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
- 
+
       - name: Compile project for analysis
         run: mvn -B compile -DskipTests
- 
+
       - name: SonarQube code analysis
         uses: SonarSource/sonarqube-scan-action@v4
         env:
@@ -129,7 +133,7 @@ jobs:
             -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
             -Dsonar.java.binaries=target/classes
- 
+
       - name: SonarCloud Quality Gate Check
         id: quality-gate
         uses: phwt/sonarqube-quality-gate-action@v1
@@ -139,4 +143,3 @@ jobs:
           sonar-token: ${{ env.SONAR_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-quality-gate-error: true
-  
